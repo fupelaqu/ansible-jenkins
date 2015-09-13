@@ -1,22 +1,29 @@
 ---
 
+# NOTE: in this playbook the 'config_changed' variable was set multiple times even a task
+# is skipped (see https://github.com/ansible/ansible/issues/4297) which means that in some
+# case Jenkins won't restart even if the config file was changed.
+
 - name: Create jenkins configuration for RedHat
   file: path=/etc/sysconfig/jenkins state=touch
   when: ansible_os_family == "RedHat"
 
 - name: Configure Jenkins Port for RedHat
   lineinfile: dest=/etc/sysconfig/jenkins regexp=^JENKINS_PORT= line=JENKINS_PORT={{port}}
-  register: config_changed
+  register: rh_config_changed
   when: ansible_os_family == "RedHat"
 
 - name: Configure Jenkins Port for Debian
   lineinfile: dest=/etc/default/jenkins regexp=^HTTP_PORT= line=HTTP_PORT={{port}}
-  register: config_changed
+  register: deb_config_changed
   when: ansible_os_family == "Debian"
+
+- set_fact:
+    config_changed: "{{ rh_config_changed.changed or deb_config_changed.changed }}"
 
 - name: Restart jenkins now
   service: name=jenkins state=restarted
-  when: config_changed.changed
+  when: config_changed
 
 - name: Configure Jenkins Prefix for RedHat
   when: prefix is defined and ansible_os_family == "RedHat"
